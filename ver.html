@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Juan Tereré Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-slate-950 text-white min-h-screen p-4 md:p-8">
+
+    <header class="flex flex-col lg:flex-row justify-between items-center mb-8 bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <div class="flex items-center gap-6 mb-6 lg:mb-0">
+            <img src="Juan_Tereré_Aventurero.png" class="w-32 h-32 md:w-40 md:h-40 object-contain drop-shadow-[0_0_15px_rgba(0,255,204,0.3)]" alt="Logo Juan Tereré">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-black text-teal-400 tracking-wide uppercase">Estadísticas de Usuarios</h1>
+                <p class="text-slate-400 text-lg mt-1">Panel de control en tiempo real</p>
+            </div>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <select id="filtroSponsor" onchange="actualizarDashboard()" class="bg-slate-800 border border-teal-500 p-3 rounded-lg text-white font-semibold outline-none focus:ring-2 focus:ring-teal-400 transition-all">
+                <option value="todos">Todos los Sponsors</option>
+                <option value="Juan">Juan Tereré</option>
+                <option value="Chipa">Chipa Viajera</option>
+            </select>
+            <select id="filtroTiempo" onchange="actualizarDashboard()" class="bg-slate-800 border border-teal-500 p-3 rounded-lg text-white font-semibold outline-none focus:ring-2 focus:ring-teal-400 transition-all">
+                <option value="todo">Histórico Completo</option>
+                <option value="semana">Esta Semana</option>
+            </select>
+            <button onclick="descargarGanadores()" class="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 px-6 py-3 rounded-lg font-bold text-slate-900 shadow-lg transition-all transform hover:scale-105">
+                📥 Exportar Ganadores
+            </button>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full bg-teal-400"></div>
+            <p class="text-slate-400 font-medium">Usuarios Totales</p>
+            <h2 id="kpiUsuarios" class="text-4xl font-black mt-2">0</h2>
+        </div>
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full bg-emerald-400"></div>
+            <p class="text-slate-400 font-medium">Promedio Paradas</p>
+            <h2 id="kpiParadas" class="text-4xl font-black mt-2">0</h2>
+        </div>
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>
+            <p class="text-slate-400 font-medium">Bus Favorito</p>
+            <h2 id="kpiBus" class="text-2xl font-bold mt-3 text-orange-400">-</h2>
+        </div>
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full bg-blue-400"></div>
+            <p class="text-slate-400 font-medium">Ciudad Top</p>
+            <h2 id="kpiCiudad" class="text-2xl font-bold mt-3 text-blue-400">-</h2>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg flex flex-col items-center justify-center">
+            <h3 class="w-full text-left text-lg font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2">Elección de Vehículo</h3>
+            <div class="w-full max-w-[300px]"><canvas id="chartBuses"></canvas></div>
+        </div>
+        <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg flex flex-col items-center justify-center">
+            <h3 class="w-full text-left text-lg font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2">Impacto de Sponsors</h3>
+            <div class="w-full max-w-[300px]"><canvas id="chartSponsors"></canvas></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="bg-slate-900 p-6 rounded-xl border border-orange-900/50 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 to-amber-400"></div>
+            <h3 class="text-xl font-bold mb-4 text-amber-400 flex items-center gap-2">🏆 Top 5 - Ganadores de la Semana</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead><tr class="text-slate-400 border-b border-slate-700 text-sm"><th class="pb-2">Piloto</th><th class="pb-2">Ciudad</th><th class="pb-2 text-right">Puntos</th></tr></thead>
+                    <tbody id="listaSemanal"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 p-6 rounded-xl border border-teal-900/50 shadow-lg relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-600 to-cyan-400"></div>
+            <h3 class="text-xl font-bold mb-4 text-teal-400 flex items-center gap-2">🌍 Ranking Nacional (General)</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead><tr class="text-slate-400 border-b border-slate-700 text-sm"><th class="pb-2">#</th><th class="pb-2">Piloto</th><th class="pb-2">Ciudad</th><th class="pb-2 text-center">Paradas</th><th class="pb-2 text-right">Puntos</th></tr></thead>
+                    <tbody id="listaRanking"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* --- 1. CONFIGURACIÓN FIREBASE (Ya conectada) --- */
+        const firebaseConfig = {
+            apiKey: "AIzaSyC3oWovnz51_dQ8_HmFo78Y_7KN-M0xB8c",
+            authDomain: "buses-de-juanterere.firebaseapp.com",
+            projectId: "buses-de-juanterere",
+            storageBucket: "buses-de-juanterere.firebasestorage.app",
+            messagingSenderId: "810069577060",
+            appId: "1:810069577060:web:28c1c02bebe1b4989d3e71"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let datosGlobales = []; 
+        let charts = {}; 
+
+        /* --- 2. CARGA DE DATOS --- */
+        async function init() {
+            try {
+                const snapshot = await db.collection('partidas').get();
+                datosGlobales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                actualizarDashboard();
+            } catch (error) {
+                console.error("Error conectando a Firebase:", error);
+                alert("No se pudieron cargar los datos de la base de datos.");
+            }
+        }
+
+        /* Utilidad para encontrar el valor más repetido */
+        function obtenerModa(array) {
+            if(array.length === 0) return '-';
+            const conteo = {};
+            let maxEl = array[0], maxCount = 1;
+            for(let i = 0; i < array.length; i++) {
+                let el = array[i];
+                if(el == null || el === '') continue;
+                if(conteo[el] == null) conteo[el] = 1;
+                else conteo[el]++;  
+                if(conteo[el] > maxCount) { maxEl = el; maxCount = conteo[el]; }
+            }
+            return maxEl;
+        }
+
+        /* Saber si un timestamp es de la semana actual (Lunes a Domingo) */
+        function esEstaSemana(fechaFirebase) {
+            if (!fechaFirebase) return false;
+            const fecha = fechaFirebase.toDate();
+            const hoy = new Date();
+            const diaSemana = hoy.getDay() || 7; 
+            const inicioSemana = new Date(hoy.setDate(hoy.getDate() - diaSemana + 1));
+            inicioSemana.setHours(0,0,0,0);
+            return fecha >= inicioSemana;
+        }
+
+        /* --- 3. LÓGICA DE FILTRADO Y UI --- */
+        function actualizarDashboard() {
+            const filtroSponsor = document.getElementById('filtroSponsor').value;
+            const filtroTiempo = document.getElementById('filtroTiempo').value;
+
+            // Filtrar Sponsor
+            let filtrados = filtroSponsor === 'todos' ? datosGlobales : datosGlobales.filter(d => d.sponsor === filtroSponsor);
+            
+            // Filtrar Tiempo (Aplicable a KPIs y Gráficos)
+            if (filtroTiempo === 'semana') {
+                filtrados = filtrados.filter(d => esEstaSemana(d.fecha));
+            }
+
+            // Actualizar KPIs
+            document.getElementById('kpiUsuarios').innerText = filtrados.length.toLocaleString();
+            let sumParadas = filtrados.reduce((a, b) => a + (Number(b.paradas) || 0), 0);
+            document.getElementById('kpiParadas').innerText = filtrados.length > 0 ? (sumParadas / filtrados.length).toFixed(1) : '0';
+            document.getElementById('kpiBus').innerText = obtenerModa(filtrados.map(d => d.tipoBus));
+            document.getElementById('kpiCiudad').innerText = obtenerModa(filtrados.map(d => d.ciudad));
+
+            // Ranking Nacional (Top 10 Histórico o Filtrado)
+            const listaNac = document.getElementById('listaRanking');
+            listaNac.innerHTML = '';
+            let datosTablaNac = [...filtrados].sort((a,b) => (b.paradas || 0) - (a.paradas || 0) || (b.puntos || 0) - (a.puntos || 0));
+            
+            const medallas = ['🥇','🥈','🥉'];
+            datosTablaNac.slice(0, 10).forEach((d, i) => {
+                let prefijo = medallas[i] || `${i+1}.`;
+                listaNac.innerHTML += `<tr class="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
+                    <td class="py-3 text-slate-400">${prefijo}</td>
+                    <td class="py-3 font-bold">${(d.nombre||'Anónimo').substring(0,20)}</td>
+                    <td class="py-3 text-sm text-slate-400">${d.ciudad||'-'}</td>
+                    <td class="py-3 text-center text-teal-400 font-semibold">${d.paradas||0}</td>
+                    <td class="py-3 text-right text-emerald-400 font-bold">${(d.puntos||0).toLocaleString()}</td>
+                </tr>`;
+            });
+
+            // Ranking Semanal (Top 5) - Este siempre busca la semana, sin importar el filtro global de tiempo
+            const listaSem = document.getElementById('listaSemanal');
+            listaSem.innerHTML = '';
+            let datosSemana = (filtroSponsor === 'todos' ? datosGlobales : datosGlobales.filter(d => d.sponsor === filtroSponsor)).filter(d => esEstaSemana(d.fecha));
+            
+            datosSemana.sort((a,b) => (b.paradas || 0) - (a.paradas || 0) || (b.puntos || 0) - (a.puntos || 0)).slice(0, 5).forEach((d, i) => {
+                let colorNombre = i === 0 ? 'text-amber-400 font-black' : 'font-bold';
+                listaSem.innerHTML += `<tr class="border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors">
+                    <td class="py-3 ${colorNombre}">${(d.nombre||'Anónimo').substring(0,20)}</td>
+                    <td class="py-3 text-sm text-slate-400">${d.ciudad||'-'}</td>
+                    <td class="py-3 text-right text-orange-400 font-bold">${(d.puntos||0).toLocaleString()}</td>
+                </tr>`;
+            });
+
+            if (datosSemana.length === 0) listaSem.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-slate-500">No hay partidas registradas esta semana.</td></tr>';
+            if (datosTablaNac.length === 0) listaNac.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Sin datos para mostrar.</td></tr>';
+
+            renderCharts(filtrados);
+        }
+
+        /* --- 4. GRÁFICOS (CHART.JS) --- */
+        function renderCharts(datos) {
+            const ctx1 = document.getElementById('chartBuses').getContext('2d');
+            const ctx2 = document.getElementById('chartSponsors').getContext('2d');
+            
+            if(charts.bus) charts.bus.destroy();
+            if(charts.sponsor) charts.sponsor.destroy();
+            
+            // Gráfico Buses
+            let convencionales = datos.filter(d => d.tipoBus === 'Convencional' || !d.tipoBus).length;
+            let electricos = datos.filter(d => d.tipoBus === 'Electrico').length;
+
+            charts.bus = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Convencional', 'Eléctrico'],
+                    datasets: [{ data: [convencionales, electricos], backgroundColor: ['#f59e0b', '#00ffcc'], borderWidth: 0 }]
+                },
+                options: { cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } } }
+            });
+
+            // Gráfico Sponsors
+            let cuentaJuan = datos.filter(d => d.sponsor === 'Juan').length;
+            let cuentaChipa = datos.filter(d => d.sponsor === 'Chipa').length;
+
+            charts.sponsor = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Juan Tereré', 'Chipa Viajera'],
+                    datasets: [{ data: [cuentaJuan, cuentaChipa], backgroundColor: ['#3b82f6', '#ef4444'], borderWidth: 0 }]
+                },
+                options: { cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } } }
+            });
+        }
+
+        /* --- 5. EXPORTAR GANADORES --- */
+        function descargarGanadores() {
+            // Solo descarga los que tienen datos privados completados (los ganadores)
+            let ganadores = datosGlobales.filter(d => d.telefono && d.ci);
+            
+            if(ganadores.length === 0) {
+                alert("Aún no hay ganadores registrados con datos de contacto.");
+                return;
+            }
+
+            let csv = "Nombre en Juego,Nombre Completo,CI,Telefono,Ciudad,Paradas,Puntos,Fecha\n";
+            ganadores.forEach(d => {
+                let fecha = d.fecha ? d.fecha.toDate().toLocaleDateString() : '-';
+                csv += `"${d.nombre}","${d.nombreCompleto||''}","${d.ci||''}","${d.telefono}","${d.ciudad||''}","${d.paradas||0}","${d.puntos||0}","${fecha}"\n`;
+            });
+            
+            const blob = new Blob(["\uFEFF"+csv], { type: 'text/csv;charset=utf-8;' }); // \uFEFF para Excel UTF-8
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'ganadores_juan_terere.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Cargar todo al inicio
+        init();
+    </script>
+</body>
+</html>

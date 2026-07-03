@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plataforma Interactiva | Línea 12</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyC3oWovnz51_dQ8_HmFo78Y_7KN-M0xB8c",
+            authDomain: "buses-de-juanterere.firebaseapp.com",
+            projectId: "buses-de-juanterere",
+            storageBucket: "buses-de-juanterere.firebasestorage.app",
+            messagingSenderId: "810069577060",
+            appId: "1:810069577060:web:28c1c02bebe1b4989d3e71"
+        };
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.firestore();
+    </script>
+
+    <style>
+        body { margin: 0; padding: 0; background: #121212; font-family: 'Arial', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .screen { position: absolute; width: 100%; max-width: 400px; height: 100vh; display: none; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #2a5298 0%, #1e3c72 100%); text-align: center; z-index: 20; box-sizing: border-box; padding: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);}
+        .active { display: flex; }
+        .img-titulo { width: 208px; margin-bottom: 20px; animation: flotar 3s ease-in-out infinite alternate;}
+        @keyframes flotar { 0% { transform: translateY(0px); } 100% { transform: translateY(-15px); } }
+        h1 { color: #00ffcc; text-shadow: 3px 3px 6px rgba(0,0,0,0.7); font-size: 32px; margin-bottom: 15px; font-weight: 900;}
+        h2 { color: #fff; font-size: 18px; margin: 15px 0 10px 0; border-bottom: 2px solid #00ffcc; padding-bottom: 5px; width: 80%;}
+        img { cursor: pointer; border: 4px solid transparent; border-radius: 8px; transition: 0.3s; object-fit: contain;}
+        .selected { border-color: #00ffcc; transform: scale(1.1); background: rgba(0,255,204,0.2); box-shadow: 0 0 15px rgba(0,255,204,0.5);}
+        .btn-jugar { background: linear-gradient(180deg, #00ffcc 0%, #00b38f 100%); color: #121212; padding: 15px 40px; border-radius: 30px; font-weight: 900; cursor: pointer; border: none; font-size: 20px; margin-top: 15px; width: 90%; transition: 0.2s;}
+        .carrusel-contenedor { display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 15px; margin-bottom: 15px; width: 80%;}
+        .flecha { background: none; border: none; color: #00ffcc; font-size: 35px; cursor: pointer; font-weight: bold;}
+        .carrusel-items { width: 140px; display: flex; justify-content: center; overflow: hidden;}
+        .item-sponsor { display: none; flex-direction: column; align-items: center; font-size: 14px; font-weight: bold;}
+        .item-sponsor.active { display: flex; }
+        #busPreviewContainer { height: 180px; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; background: rgba(0,0,0,0.25); border-radius: 15px;}
+        #busPreview { max-height: 115%; max-width: 115%; filter: drop-shadow(5px 5px 5px rgba(0,0,0,0.5));}
+        .chofer-img { width: auto; height: 180px; margin: 0 15px;}
+        .input-nombre { width: 85%; padding: 12px; border-radius: 12px; border: 2px solid #00ffcc; background: rgba(0,0,0,0.5); color: white; font-size: 16px; text-align: center; margin-bottom: 10px; outline: none;}
+        select.input-nombre option { color: black; }
+        canvas { background: #333; display: block; width: 100%; height: 100%; }
+        #gameContainer { position: relative; width: 100%; max-width: 400px; height: 100vh; display: none; }
+        #frenoBtn { position: absolute; bottom: 40px; right: 20px; width: 90px; height: 90px; background: radial-gradient(circle, #ff4d4d 0%, #cc0000 100%); border: 4px solid #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-weight: 900; font-size: 18px; z-index: 10; box-shadow: 0px 6px 15px rgba(0,0,0,0.6);}
+        #ui { position: absolute; top: 10px; left: 10px; right: 10px; color: white; font-size: 13px; font-weight: bold; background: rgba(0,0,0,0.65); padding: 10px; border-radius: 10px;}
+        .ui-top-row { display: flex; justify-content: space-between; align-items: center; }
+        .fuel-bar-bg { width: 100px; height: 12px; background: #333; border-radius: 6px; border: 1px solid #fff; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 5px;}
+        .fuel-bar-fill { width: 100%; height: 100%; background: #4cd964; }
+        .resumen-item { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; width: 90%; margin-bottom: 5px; text-align: left; display: flex; justify-content: space-between; font-size: 14px;}
+        .resumen-item span.lbl { color: #00ffcc; }
+    </style>
+</head>
+<body>
+
+<div id="scr1" class="screen active">
+    <img src="Juan_Tereré_Aventurero.png" class="img-titulo" alt="Juan Tereré">
+    <h1>LOS JUEGOS DE<br>JUAN TERERÉ</h1>
+    <button class="btn-jugar" onclick="pantallas.mostrar('scr2')">JUGAR</button>
+</div>
+
+<div id="scr2" class="screen" style="justify-content: flex-start; padding-top: 30px;">
+    <h2>ELIGE TU BUS</h2>
+    <div style="display:flex; gap:15px; justify-content: center; margin-bottom: 10px;">
+        <div onclick="interfaz.seleccionarBus('Convencional')"><img src="Bus.png" id="imgBusNormal" style="height:90px;" class="selected"><div style="font-size:12px;">Convencional</div></div>
+        <div onclick="interfaz.seleccionarBus('Electrico')"><img src="Bus_electrico.png" id="imgBusElec" style="height:90px;"><div style="font-size:12px;">Eléctrico</div></div>
+    </div>
+    <h2>ELIGE TU SPONSOR</h2>
+    <div class="carrusel-contenedor">
+        <button class="flecha" onclick="interfaz.moverCarrusel(-1)">&#8592;</button>
+        <div class="carrusel-items" id="sponsorCarousel">
+            <div class="item-sponsor active" data-val="La Chipa Viajera"><img src="Libro_Chipa_viajera.png" style="width:80px;"><span>Chipa Viajera</span></div>
+            <div class="item-sponsor" data-val="Juan Tereré"><img src="Libro_UNESCO_Juantereré.png" style="width:80px;"><span>Juan Tereré</span></div>
+        </div>
+        <button class="flecha" onclick="interfaz.moverCarrusel(1)">&#8594;</button>
+    </div>
+    <div id="busPreviewContainer"><img id="busPreview" src="Bus_Chipa_Viajera.png"></div>
+    <button class="btn-jugar" onclick="pantallas.mostrar('scr3')" style="margin-top: 0;">Siguiente</button>
+</div>
+
+<div id="scr3" class="screen">
+    <h2>TUS DATOS</h2>
+    <input type="text" id="playerName" class="input-nombre" placeholder="Ingresa tu alias o nombre...">
+    <select id="playerCity" class="input-nombre">
+        <option value="" disabled selected>¿De qué ciudad sos?</option>
+        <option value="San Lorenzo">San Lorenzo</option>
+        <option value="Capiatá">Capiatá</option>
+        <option value="Asunción">Asunción</option>
+        <option value="Luque">Luque</option>
+    </select>
+    <h2>ELIGE TU CHOFER</h2>
+    <div style="display:flex; gap:30px; justify-content: center; margin-bottom: 20px; height: 200px; align-items: flex-end;">
+        <img src="chofer_hom.png" id="ch1" class="chofer-img" onclick="interfaz.seleccionarChofer('Hombre')">
+        <img src="chofer_fem.png" id="ch2" class="chofer-img" onclick="interfaz.seleccionarChofer('Mujer')">
+    </div>
+    <button class="btn-jugar" onclick="game.iniciar()">¡Arrancar Motor!</button>
+</div>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div class="ui-top-row"><span>Puntos: <span id="scoreUI" style="color:#4cd964;">0</span></span></div>
+        <div class="ui-top-row"><span>Parada: <span id="paradasUI">0</span> / 100</span></div>
+        <div class="ui-top-row"><span>⛽ <div class="fuel-bar-bg"><div id="fuelBar" class="fuel-bar-fill"></div></div></span></div>
+    </div>
+    <div id="frenoBtn">FRENO</div>
+</div>
+
+<div id="pantalla-top3" class="screen">
+    <h2 style="font-size:24px; color:#ffcc00;">¡ESTÁS EN EL TOP 3! 🏆</h2>
+    <p style="font-size:14px; margin-bottom: 20px;">Dejanos tus datos reales para reclamar tu premio si mantenés el puesto esta semana.</p>
+    <input type="text" id="top3-nombre" class="input-nombre" placeholder="Nombre completo">
+    <input type="text" id="top3-ci" class="input-nombre" placeholder="Cédula de Identidad (CI)">
+    <input type="tel" id="top3-tel" class="input-nombre" placeholder="Número de Celular">
+    <button class="btn-jugar" onclick="guardarTop3()">Guardar y Continuar</button>
+</div>
+
+<div id="scr4" class="screen" style="justify-content: center;">
+    <h1 id="tituloFinal" style="font-size: 28px;">¡RECORRIDO<br>FINALIZADO!</h1>
+    <div class="resumen-item"><span class="lbl">Piloto:</span> <span id="resNombre"></span></div>
+    <div class="resumen-item"><span class="lbl">Sponsor:</span> <span id="resSponsor"></span></div>
+    <div class="resumen-item"><span class="lbl">Puntaje Final:</span> <span id="resPuntaje" style="color:#00ffcc; font-weight:bold;"></span></div>
+    <button class="btn-jugar" onclick="location.reload()" style="margin-top: 20px;">JUGAR NUEVAMENTE</button>
+</div>
+
+<script>
+const SPONSOR_CONFIG = {
+    'La Chipa Viajera': { adImg: 'cartel_publi_Chipa' },
+    'Juan Tereré': { adImg: 'cartel_publi_juant' }
+};
+
+const GAME = {
+    MAX_SPEED: 8, ACCELERATION: 0.08, BRAKE_FORCE: 0.45, INERTIA: 0.03,
+    CANVAS_W: 400, CANVAS_H: 700, LANE_WIDTH: 130, BUS_WIDTH: 110, BUS_HEIGHT: 160, 
+    MAX_FUEL: 100, FUEL_DEPLETION: 0.03, FUEL_RECOVERY: 30, TOTAL_VEHICLES: 25,
+    SPAWN_RATES: { BACHES: 1500, OBRAS: 2000, PARADAS: 2500, COMBUSTIBLE: 3000, CARTELES: 1200 }
+};
+
+const configJugador = { nombre: '', ciudad: '', tipoBus: 'Convencional', sponsor: 'La Chipa Viajera', chofer: null };
+const estadisticas = { puntaje: 0, combustibleRestante: GAME.MAX_FUEL, paradasPasadas: 0, impactos: 0, tiempoInicio: 0, esTop3: false };
+
+const IMAGES = {};
+function preloadImage(name, src) { IMAGES[name] = new Image(); IMAGES[name].src = src; }
+function imgLista(img) { return !!img && img.complete && img.naturalWidth > 0; }
+
+// Precarga básica
+preloadImage('Bus_Chipa_Viajera', 'Bus_Chipa_Viajera.png');
+preloadImage('Bus_Juan_tereré', 'Bus_Juan_tereré.png');
+preloadImage('bus_manejar_chipa', 'bus_manejar_chipa.png');
+preloadImage('bus_manejar_juanterere', 'bus_manejar_juanterere.png');
+preloadImage('calle_1', 'calle_1.jpg');
+preloadImage('calle_2', 'calle_2.jpg');
+preloadImage('cartel_publi_Chipa', 'cartel_publi_Chipa.png');
+preloadImage('cartel_publi_juant', 'cartel_publi_juant.png');
+preloadImage('gasolina_jt', 'gasolina_jt.png'); 
+
+const pantallas = {
+    mostrar: function(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+};
+
+const interfaz = {
+    currentSponsorIndex: 0,
+    seleccionarBus: function(tipo) {
+        configJugador.tipoBus = tipo;
+        document.getElementById('imgBusNormal').classList.remove('selected');
+        document.getElementById('imgBusElec').classList.remove('selected');
+        tipo === 'Convencional' ? document.getElementById('imgBusNormal').classList.add('selected') : document.getElementById('imgBusElec').classList.add('selected');
+    },
+    seleccionarChofer: function(tipo) {
+        configJugador.chofer = tipo;
+        document.getElementById('ch1').classList.remove('selected');
+        document.getElementById('ch2').classList.remove('selected');
+        tipo === 'Hombre' ? document.getElementById('ch1').classList.add('selected') : document.getElementById('ch2').classList.add('selected');
+    },
+    moverCarrusel: function(dir) {
+        const items = document.querySelectorAll('.item-sponsor');
+        items[this.currentSponsorIndex].classList.remove('active');
+        this.currentSponsorIndex = (this.currentSponsorIndex + dir + items.length) % items.length;
+        items[this.currentSponsorIndex].classList.add('active');
+        configJugador.sponsor = items[this.currentSponsorIndex].getAttribute('data-val');
+        document.getElementById('busPreview').src = configJugador.sponsor === 'La Chipa Viajera' ? 'Bus_Chipa_Viajera.png' : 'Bus_Juan_tereré.png';
+    },
+    mostrarGameOver: async function(victoria = false) {
+        const duracionSegundos = Math.floor((Date.now() - estadisticas.tiempoInicio) / 1000);
+        document.getElementById('gameContainer').style.display = 'none';
+
+        try {
+            const snap = await db.collection('partidas').orderBy('puntos', 'desc').limit(3).get();
+            let esTop = false;
+            if (snap.size < 3) esTop = true;
+            else if (estadisticas.puntaje > snap.docs[2].data().puntos) esTop = true;
+
+            if (esTop) {
+                estadisticas.esTop3 = true;
+                pantallas.mostrar('pantalla-top3');
+            } else {
+                await db.collection('partidas').add({
+                    nombre: configJugador.nombre, ciudad: configJugador.ciudad, puntos: Number(estadisticas.puntaje), paradas: Number(estadisticas.paradasPasadas),
+                    chofer: configJugador.chofer, tipoBus: configJugador.tipoBus, sponsor: configJugador.sponsor,
+                    tiempo: duracionSegundos, impactos: estadisticas.impactos, fecha: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                this.finalizar(victoria);
+            }
+        } catch (e) { this.finalizar(victoria); }
+    },
+    finalizar: function(victoria) {
+        document.getElementById('tituloFinal').innerHTML = victoria ? "¡RECORRIDO<br>COMPLETADO!" : "¡RECORRIDO<br>FINALIZADO!";
+        document.getElementById('resNombre').innerText = configJugador.nombre;
+        document.getElementById('resSponsor').innerText = configJugador.sponsor;
+        document.getElementById('resPuntaje').innerText = estadisticas.puntaje;
+        pantallas.mostrar('scr4');
+    }
+};
+
+async function guardarTop3() {
+    const duracionSegundos = Math.floor((Date.now() - estadisticas.tiempoInicio) / 1000);
+    try {
+        await db.collection('partidas').add({
+            nombre: configJugador.nombre, ciudad: configJugador.ciudad, puntos: Number(estadisticas.puntaje), paradas: Number(estadisticas.paradasPasadas),
+            chofer: configJugador.chofer, tipoBus: configJugador.tipoBus, sponsor: configJugador.sponsor,
+            tiempo: duracionSegundos, impactos: estadisticas.impactos, fecha: firebase.firestore.FieldValue.serverTimestamp(),
+            nombreCompleto: document.getElementById('top3-nombre').value, ci: document.getElementById('top3-ci').value, telefono: document.getElementById('top3-tel').value
+        });
+        interfaz.finalizar(estadisticas.paradasPasadas >= 100);
+    } catch(e) { alert("Error al guardar."); }
+}
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let ROAD_LEFT, LANES, LINEA_DIVISORIA, animationFrameId;
+
+const motor = {
+    velocidadActual: 0, distanciaRecorrida: 0,
+    activos: { carteles: [], bidones: [] },
+    spawns: { nextCartel: 700, nextBidon: 1500 },
+    inicializar: function() {
+        canvas.width = GAME.CANVAS_W; canvas.height = GAME.CANVAS_H;
+        ROAD_LEFT = (GAME.CANVAS_W - (GAME.LANE_WIDTH * 2)) / 2;
+        LANES = [ROAD_LEFT + GAME.LANE_WIDTH / 2, ROAD_LEFT + GAME.LANE_WIDTH + GAME.LANE_WIDTH / 2];
+        LINEA_DIVISORIA = ROAD_LEFT + GAME.LANE_WIDTH;
+        motor.activos.carteles = []; motor.activos.bidones = [];
+    }
+};
+
+const bus = { w: GAME.BUS_WIDTH, h: GAME.BUS_HEIGHT, y: GAME.CANVAS_H - 260, currentX: 0, targetLane: 1, angle: 0, frenando: false };
+const controles = { izq: false, der: false, frenoBtn: false };
+
+window.addEventListener("keydown", e => { if(e.code === "ArrowLeft") controles.izq = true; if(e.code === "ArrowRight") controles.der = true; if(e.code === "Space") controles.frenoBtn = true; });
+window.addEventListener("keyup", e => { if(e.code === "ArrowLeft") controles.izq = false; if(e.code === "ArrowRight") controles.der = false; if(e.code === "Space") controles.frenoBtn = false; });
+const frenoDOM = document.getElementById("frenoBtn");
+frenoDOM.addEventListener("touchstart", (e) => { e.preventDefault(); controles.frenoBtn = true; }); frenoDOM.addEventListener("touchend", () => controles.frenoBtn = false);
+
+class CartelSponsor {
+    constructor() {
+        this.x = Math.random() < 0.5 ? ROAD_LEFT - 40 : ROAD_LEFT + (GAME.LANE_WIDTH * 2) + 12;
+        this.y = -60; this.visto = false;
+        this.imgId = SPONSOR_CONFIG[configJugador.sponsor] ? SPONSOR_CONFIG[configJugador.sponsor].adImg : 'cartel_publi_Chipa';
+    }
+    update() { 
+        this.y += motor.velocidadActual; 
+        // LÓGICA DE MARKETING: Medir impacto cuando el cartel pasa
+        if(!this.visto && this.y > bus.y + bus.h) { this.visto = true; estadisticas.impactos++; }
+    }
+    draw() { if (imgLista(IMAGES[this.imgId])) ctx.drawImage(IMAGES[this.imgId], this.x, this.y, 40, 70); }
+}
+
+class BidonCombustible {
+    constructor() { this.x = LANES[Math.floor(Math.random() * 2)]; this.y = -50; this.w = 35; this.h = 48; this.recogido = false; }
+    update() { this.y += motor.velocidadActual; }
+    draw() { if (!this.recogido && imgLista(IMAGES['gasolina_jt'])) ctx.drawImage(IMAGES['gasolina_jt'], this.x - this.w/2, this.y - this.h/2, this.w, this.h); }
+}
+
+const game = {
+    iniciar: function() {
+        configJugador.nombre = document.getElementById('playerName').value.trim() || 'Piloto';
+        configJugador.ciudad = document.getElementById('playerCity').value || 'Asunción';
+        if(!configJugador.chofer) { alert("¡Elige tu chofer!"); return; }
+        pantallas.mostrar('gameContainer');
+        motor.inicializar();
+        bus.currentX = LANES[1];
+        estadisticas.tiempoInicio = Date.now(); estadisticas.puntaje = 0; estadisticas.combustibleRestante = GAME.MAX_FUEL;
+        requestAnimationFrame(this.loop.bind(this));
+    },
+    loop: function() {
+        // Físicas
+        bus.frenando = controles.frenoBtn;
+        if (bus.frenando) motor.velocidadActual = Math.max(0, motor.velocidadActual - GAME.BRAKE_FORCE); 
+        else motor.velocidadActual = Math.min(GAME.MAX_SPEED, motor.velocidadActual + GAME.ACCELERATION);
+        
+        if (motor.velocidadActual > 0) {
+            estadisticas.combustibleRestante -= GAME.FUEL_DEPLETION;
+            if (estadisticas.combustibleRestante <= 0) { interfaz.mostrarGameOver(false); return; }
+            estadisticas.puntaje += 0.1; // Suma puntos por avanzar
+        }
+
+        if (controles.izq) bus.targetLane = 0; if (controles.der) bus.targetLane = 1;
+        let dx = LANES[bus.targetLane] - bus.currentX;
+        bus.currentX += dx * 0.1; bus.angle += (dx * 0.015 - bus.angle) * 0.2; 
+        motor.distanciaRecorrida += motor.velocidadActual;
+
+        // Spawns
+        if (motor.distanciaRecorrida > motor.spawns.nextCartel) { motor.activos.carteles.push(new CartelSponsor()); motor.spawns.nextCartel = motor.distanciaRecorrida + GAME.SPAWN_RATES.CARTELES; }
+        if (motor.distanciaRecorrida > motor.spawns.nextBidon) { motor.activos.bidones.push(new BidonCombustible()); motor.spawns.nextBidon = motor.distanciaRecorrida + GAME.SPAWN_RATES.COMBUSTIBLE; }
+
+        // Colisiones Bidones
+        motor.activos.bidones.forEach((b, i) => {
+            b.update();
+            if (!b.recogido && Math.hypot(bus.currentX - b.x, bus.y - b.y) < 60) { b.recogido = true; estadisticas.combustibleRestante = Math.min(GAME.MAX_FUEL, estadisticas.combustibleRestante + GAME.FUEL_RECOVERY); }
+            if (b.y > GAME.CANVAS_H + 100) motor.activos.bidones.splice(i, 1);
+        });
+        
+        motor.activos.carteles.forEach((c, i) => { c.update(); if (c.y > GAME.CANVAS_H + 100) motor.activos.carteles.splice(i, 1); });
+
+        // Dibujar
+        ctx.clearRect(0, 0, GAME.CANVAS_W, GAME.CANVAS_H);
+        let yScroll = motor.distanciaRecorrida % GAME.CANVAS_H;
+        if (imgLista(IMAGES['calle_1'])) { ctx.drawImage(IMAGES['calle_1'], 0, yScroll, GAME.CANVAS_W, GAME.CANVAS_H); ctx.drawImage(IMAGES['calle_1'], 0, yScroll - GAME.CANVAS_H, GAME.CANVAS_W, GAME.CANVAS_H); }
+        
+        motor.activos.bidones.forEach(b => b.draw());
+        motor.activos.carteles.forEach(c => c.draw());
+
+        ctx.save(); ctx.translate(bus.currentX, bus.y + bus.h/2); ctx.rotate(bus.angle);
+        let topDownId = configJugador.sponsor === 'La Chipa Viajera' ? 'bus_manejar_chipa' : 'bus_manejar_juanterere';
+        if (imgLista(IMAGES[topDownId])) ctx.drawImage(IMAGES[topDownId], -bus.w/2, -bus.h/2, bus.w, bus.h);
+        ctx.restore();
+
+        document.getElementById('scoreUI').innerText = Math.floor(estadisticas.puntaje);
+        document.getElementById('fuelBar').style.width = Math.max(0, (estadisticas.combustibleRestante / GAME.MAX_FUEL) * 100) + '%';
+        
+        animationFrameId = requestAnimationFrame(this.loop.bind(this));
+    }
+};
+</script>
+</body>
+</html>

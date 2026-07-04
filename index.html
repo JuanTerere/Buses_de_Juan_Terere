@@ -179,8 +179,7 @@ preloadImage('Bus_Chipa_Viajera', 'Bus_Chipa_Viajera.png');
 preloadImage('Bus_Juan_tereré', 'Bus_Juan_tereré.png');
 preloadImage('bus_manejar_chipa', 'bus_manejar_chipa.png');
 preloadImage('bus_manejar_juanterere', 'bus_manejar_juanterere.png');
-preloadImage('calle_1', 'calle_1.jpg');
-preloadImage('calle_2', 'calle_2.jpg');
+// (Fondo de calle: se dibuja de forma procedural, sin necesidad de imágenes)
 preloadImage('cartel_publi_Chipa', 'cartel_publi_Chipa.png');
 preloadImage('cartel_publi_juant', 'cartel_publi_juant.png');
 preloadImage('gasolina_jt', 'gasolina_jt.png'); 
@@ -352,7 +351,14 @@ const game = {
         // Dibujar
         ctx.clearRect(0, 0, GAME.CANVAS_W, GAME.CANVAS_H);
         let yScroll = motor.distanciaRecorrida % GAME.CANVAS_H;
-        if (imgLista(IMAGES['calle_1'])) { ctx.drawImage(IMAGES['calle_1'], 0, yScroll, GAME.CANVAS_W, GAME.CANVAS_H); ctx.drawImage(IMAGES['calle_1'], 0, yScroll - GAME.CANVAS_H, GAME.CANVAS_W, GAME.CANVAS_H); }
+        // Dibujar fondo de la ruta de forma procedural (sin imágenes): calzada gris + líneas de carril
+        ctx.fillStyle = "#444";
+        ctx.fillRect(ROAD_LEFT, 0, GAME.LANE_WIDTH * 2, GAME.CANVAS_H);
+        ctx.strokeStyle = "#FFF"; ctx.lineWidth = 4; ctx.setLineDash([40, 40]); ctx.lineDashOffset = -motor.distanciaRecorrida;
+        ctx.beginPath(); ctx.moveTo(ROAD_LEFT + GAME.LANE_WIDTH, 0); ctx.lineTo(ROAD_LEFT + GAME.LANE_WIDTH, GAME.CANVAS_H); ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = "#FFCC00"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(ROAD_LEFT, 0); ctx.lineTo(ROAD_LEFT, GAME.CANVAS_H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ROAD_LEFT + GAME.LANE_WIDTH*2, 0); ctx.lineTo(ROAD_LEFT + GAME.LANE_WIDTH*2, GAME.CANVAS_H); ctx.stroke();
         
         motor.activos.bidones.forEach(b => b.draw());
         motor.activos.carteles.forEach(c => c.draw());

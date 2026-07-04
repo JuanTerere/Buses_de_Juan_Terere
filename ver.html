@@ -3,228 +3,441 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analítica de Campañas | Panel de Administración</title>
+    <title>Dashboard | Juan Tereré Analytics</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <style> @media print { .no-print { display: none !important; } body { background: white; color: black; } } </style>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .kpi-bar { position: absolute; top: 0; left: 0; width: 4px; height: 100%; border-radius: 4px 0 0 4px; }
+        .sponsor-bar { transition: width 1s ease-in-out; }
+        .fade-in { animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .loading-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
 </head>
-<body class="bg-slate-50 text-slate-900 p-8 min-h-screen font-sans">
+<body class="bg-slate-950 text-white min-h-screen p-3 md:p-6">
 
-    <!-- CONTROLES (Ocultos al imprimir) -->
-    <div class="no-print bg-slate-900 p-6 rounded-xl mb-8 flex flex-col md:flex-row justify-between items-center shadow-lg">
+<!-- HEADER -->
+<header class="flex flex-col lg:flex-row justify-between items-center mb-6 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl">
+    <div class="flex items-center gap-5 mb-4 lg:mb-0">
+        <img src="imagenes/Juan_Tereré_Aventurero.png" class="w-24 h-24 object-contain drop-shadow-[0_0_12px_rgba(0,255,204,0.3)]" alt="Logo Juan Tereré">
         <div>
-            <h2 class="text-white text-xl font-bold">Panel de Administración de Plataforma</h2>
-            <p class="text-slate-400 text-sm">Seleccione una campaña para generar el reporte y ver ganadores.</p>
+            <h1 class="text-2xl md:text-3xl font-black text-teal-400 tracking-wide uppercase">Juan Tereré — Analytics</h1>
+            <p class="text-slate-400 text-sm mt-1">Panel de marketing en tiempo real · <span id="lastUpdate" class="text-teal-500">Actualizando...</span></p>
         </div>
-        <div class="flex gap-4 mt-4 md:mt-0">
-            <select id="filtroSponsor" onchange="actualizarDashboard()" class="bg-slate-800 text-white p-2 rounded border border-slate-600 outline-none">
-                <option value="todos">Resumen Global (Interno)</option>
-                <option value="La Chipa Viajera">Campaña: La Chipa Viajera</option>
-                <option value="Juan Tereré">Campaña: Juan Tereré</option>
-            </select>
-            <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold">📄 Exportar a PDF</button>
+    </div>
+    <div class="flex flex-wrap gap-3 w-full lg:w-auto">
+        <select id="filtroSponsor" onchange="actualizarDashboard()" class="bg-slate-800 border border-teal-600 p-2.5 rounded-lg text-white text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-400">
+            <option value="todos">Todos los Sponsors</option>
+            <option value="Juan">Juan Tereré</option>
+            <option value="Chipa">Chipa Viajera</option>
+        </select>
+        <select id="filtroTiempo" onchange="actualizarDashboard()" class="bg-slate-800 border border-teal-600 p-2.5 rounded-lg text-white text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-400">
+            <option value="todo">Histórico completo</option>
+            <option value="semana">Esta semana</option>
+        </select>
+        <button onclick="descargarGanadores()" class="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 px-5 py-2.5 rounded-lg font-bold text-slate-900 text-sm shadow-lg transition-all hover:scale-105">
+            📥 Exportar Ganadores
+        </button>
+        <button onclick="init()" class="bg-slate-700 hover:bg-slate-600 px-5 py-2.5 rounded-lg font-bold text-white text-sm transition-all">
+            🔄 Recargar
+        </button>
+    </div>
+</header>
+
+<!-- KPIs PRINCIPALES -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow relative overflow-hidden fade-in">
+        <div class="kpi-bar bg-teal-400"></div>
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Usuarios Únicos</p>
+        <h2 id="kpiUsuarios" class="text-3xl font-black mt-1 loading-pulse">—</h2>
+        <p class="text-slate-500 text-xs mt-1">jugadores registrados</p>
+    </div>
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow relative overflow-hidden fade-in">
+        <div class="kpi-bar bg-purple-400"></div>
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Partidas Jugadas</p>
+        <h2 id="kpiPartidas" class="text-3xl font-black mt-1 loading-pulse">—</h2>
+        <p class="text-slate-500 text-xs mt-1">partidas totales</p>
+    </div>
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow relative overflow-hidden fade-in">
+        <div class="kpi-bar bg-amber-400"></div>
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Retención promedio</p>
+        <h2 id="kpiTiempo" class="text-3xl font-black mt-1 text-amber-400 loading-pulse">—</h2>
+        <p class="text-slate-500 text-xs mt-1">minutos por sesión</p>
+    </div>
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow relative overflow-hidden fade-in">
+        <div class="kpi-bar bg-blue-400"></div>
+        <p class="text-slate-400 text-xs font-medium uppercase tracking-wider">Ciudad Top</p>
+        <h2 id="kpiCiudad" class="text-2xl font-bold mt-1 text-blue-400 loading-pulse">—</h2>
+        <p class="text-slate-500 text-xs mt-1">más jugadores</p>
+    </div>
+</div>
+
+<!-- IMPACTO DE MARCA (Sección estrella para mostrar al cliente) -->
+<div class="bg-slate-900 rounded-2xl border border-teal-900/60 shadow-xl p-6 mb-6 relative overflow-hidden fade-in">
+    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-500"></div>
+    <h3 class="text-lg font-bold text-teal-300 mb-1">📊 Impacto de Marca — Tiempo de Exposición</h3>
+    <p class="text-slate-400 text-xs mb-5">Minutos totales que los jugadores estuvieron expuestos a cada sponsor mientras jugaban</p>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Sponsor 1: Chipa Viajera -->
+        <div class="bg-slate-800/60 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-red-400 text-base">🌶️ Chipa Viajera</span>
+                <span id="tiempoChipa" class="text-white font-black text-xl">—</span>
+            </div>
+            <div class="w-full bg-slate-700 rounded-full h-3 mb-2">
+                <div id="barraChipa" class="sponsor-bar h-3 rounded-full bg-gradient-to-r from-red-500 to-orange-400" style="width:0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span><span id="usuariosChipa" class="text-white font-bold">0</span> usuarios eligieron Chipa</span>
+                <span>Prom: <span id="promChipa" class="text-orange-400 font-semibold">0m</span>/sesión</span>
+            </div>
+        </div>
+        <!-- Sponsor 2: Juan Tereré -->
+        <div class="bg-slate-800/60 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-blue-400 text-base">🧉 Juan Tereré</span>
+                <span id="tiempoJuan" class="text-white font-black text-xl">—</span>
+            </div>
+            <div class="w-full bg-slate-700 rounded-full h-3 mb-2">
+                <div id="barraJuan" class="sponsor-bar h-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style="width:0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-400 mt-1">
+                <span><span id="usuariosJuan" class="text-white font-bold">0</span> usuarios eligieron Juan</span>
+                <span>Prom: <span id="promJuan" class="text-blue-400 font-semibold">0m</span>/sesión</span>
+            </div>
+        </div>
+    </div>
+    <p class="text-slate-500 text-xs mt-4 text-center italic">* Minutos totales calculados en base al tiempo real de juego registrado por sesión</p>
+</div>
+
+<!-- GRÁFICOS + PREFERENCIAS -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+    <!-- Elección de vehículo -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow flex flex-col items-center fade-in">
+        <h3 class="w-full text-left text-sm font-bold text-slate-300 mb-3 border-b border-slate-700 pb-2">🚌 Bus Elegido</h3>
+        <div class="w-full max-w-[240px]"><canvas id="chartBuses"></canvas></div>
+        <div class="flex justify-around w-full mt-3 text-xs">
+            <span class="text-amber-400">🔶 Conv: <strong id="pctConv">0%</strong></span>
+            <span class="text-teal-400">⚡ Eléc: <strong id="pctElec">0%</strong></span>
+        </div>
+    </div>
+    <!-- Sponsor elegido -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow flex flex-col items-center fade-in">
+        <h3 class="w-full text-left text-sm font-bold text-slate-300 mb-3 border-b border-slate-700 pb-2">🎯 Sponsor Elegido</h3>
+        <div class="w-full max-w-[240px]"><canvas id="chartSponsors"></canvas></div>
+        <div class="flex justify-around w-full mt-3 text-xs">
+            <span class="text-red-400">🌶 Chipa: <strong id="pctChipa">0%</strong></span>
+            <span class="text-blue-400">🧉 Juan: <strong id="pctJuan">0%</strong></span>
+        </div>
+    </div>
+    <!-- Chofer elegido -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow flex flex-col items-center fade-in">
+        <h3 class="w-full text-left text-sm font-bold text-slate-300 mb-3 border-b border-slate-700 pb-2">👤 Chofer Elegido</h3>
+        <div class="w-full max-w-[240px]"><canvas id="chartChofer"></canvas></div>
+        <div class="flex justify-around w-full mt-3 text-xs">
+            <span class="text-indigo-400">👨 Hombre: <strong id="pctHom">0%</strong></span>
+            <span class="text-pink-400">👩 Mujer: <strong id="pctFem">0%</strong></span>
+        </div>
+    </div>
+</div>
+
+<!-- RANKINGS -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Ranking semanal top 5 con podio -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-orange-900/50 shadow relative overflow-hidden fade-in">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 to-amber-400"></div>
+        <h3 class="text-base font-bold mb-1 text-amber-400 flex items-center gap-2">🏆 Top 5 — Semana Actual</h3>
+        <p class="text-slate-500 text-xs mb-4">Criterio: más paradas → más puntos · Se piden datos para el premio</p>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead><tr class="text-slate-400 border-b border-slate-700 text-xs uppercase tracking-wider">
+                    <th class="pb-2">#</th><th class="pb-2">Piloto</th><th class="pb-2">Ciudad</th>
+                    <th class="pb-2 text-center">Paradas</th><th class="pb-2 text-right">Puntos</th>
+                </tr></thead>
+                <tbody id="listaSemanal"></tbody>
+            </table>
         </div>
     </div>
 
-    <!-- REPORTE DE CAMPAÑA -->
-    <div id="reporteContenedor" class="max-w-5xl mx-auto bg-white p-10 shadow-2xl border border-slate-200">
-        
-        <!-- Encabezado -->
-        <div class="flex justify-between items-center border-b-2 border-slate-800 pb-6 mb-8">
-            <div>
-                <h1 class="text-4xl font-black uppercase tracking-tight">Reporte de Campaña</h1>
-                <h2 id="tituloCampaña" class="text-2xl text-blue-600 font-bold mt-1">Todas las Campañas</h2>
-            </div>
-            <img src="Juan_Tereré_Aventurero.png" class="h-20" alt="Logo">
-        </div>
-
-        <!-- Resumen Ejecutivo -->
-        <div class="mb-10">
-            <h3 class="text-xl font-bold border-l-4 border-blue-600 pl-3 mb-4">Resumen Ejecutivo</h3>
-            <p id="textoEjecutivo" class="text-lg text-slate-700 leading-relaxed bg-slate-50 p-6 rounded border border-slate-100">
-                Cargando datos de la campaña...
-            </p>
-        </div>
-
-        <!-- KPIs Principales -->
-        <h3 class="text-xl font-bold border-l-4 border-blue-600 pl-3 mb-4">Indicadores Principales</h3>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
-            <div class="bg-blue-50 p-5 rounded-lg border border-blue-100"><p class="text-slate-500 text-sm font-bold uppercase">Jugadores Únicos</p><h4 id="kpiUsuarios" class="text-3xl font-black text-blue-900 mt-1">0</h4></div>
-            <div class="bg-blue-50 p-5 rounded-lg border border-blue-100"><p class="text-slate-500 text-sm font-bold uppercase">Impactos Publicitarios</p><h4 id="kpiImpactos" class="text-3xl font-black text-blue-900 mt-1">0</h4></div>
-            <div class="bg-blue-50 p-5 rounded-lg border border-blue-100"><p class="text-slate-500 text-sm font-bold uppercase">Tiempo Total Exposición</p><h4 id="kpiTiempo" class="text-2xl font-black text-blue-900 mt-1">0h 0m</h4></div>
-            <div class="bg-blue-50 p-5 rounded-lg border border-blue-100"><p class="text-slate-500 text-sm font-bold uppercase">Promedio Tiempo / Jugador</p><h4 id="kpiAvgTiempo" class="text-2xl font-black text-blue-900 mt-1">0m 0s</h4></div>
-        </div>
-
-        <!-- RANKINGS TOP 5 -->
-        <h3 class="text-xl font-bold border-l-4 border-green-500 pl-3 mb-4">Rankings y Ganadores</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-            <!-- Top 5 Nacional -->
-            <div class="border border-slate-200 p-5 rounded bg-white">
-                <h4 class="text-lg font-bold mb-4 text-slate-800">🏆 Top 5 Nacional (Histórico)</h4>
-                <div id="listaNacional" class="space-y-3"></div>
-            </div>
-            <!-- Top 5 Semanal -->
-            <div class="border border-slate-200 p-5 rounded bg-green-50">
-                <h4 class="text-lg font-bold mb-4 text-green-900">🔥 Top 5 de la Semana</h4>
-                <div id="listaSemanal" class="space-y-3"></div>
-            </div>
-        </div>
-
-        <!-- Segmentación y Gráficos -->
-        <h3 class="text-xl font-bold border-l-4 border-blue-600 pl-3 mb-4">Segmentación de Audiencia</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-            <div class="border border-slate-200 p-6 rounded"><canvas id="chartChofer"></canvas></div>
-            <div class="border border-slate-200 p-6 rounded"><canvas id="chartBus"></canvas></div>
-        </div>
-
-        <!-- Cobertura Geográfica -->
-        <h3 class="text-xl font-bold border-l-4 border-blue-600 pl-3 mb-4">Cobertura Geográfica</h3>
-        <table class="w-full text-left border-collapse mb-10">
-            <thead><tr class="bg-slate-100"><th class="p-3 border border-slate-200">Ciudad</th><th class="p-3 border border-slate-200">Jugadores</th></tr></thead>
-            <tbody id="listaCiudades"></tbody>
-        </table>
-
-        <div class="text-center text-slate-400 text-sm pt-8 border-t border-slate-200">
-            Documento generado automáticamente por la Plataforma Interactiva de Publicidad.
+    <!-- Ranking Nacional top 10 -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-teal-900/50 shadow relative overflow-hidden fade-in">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-600 to-cyan-400"></div>
+        <h3 class="text-base font-bold mb-1 text-teal-400 flex items-center gap-2">🌍 Ranking Nacional — Histórico</h3>
+        <p class="text-slate-500 text-xs mb-4">Top 10 de todos los tiempos</p>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead><tr class="text-slate-400 border-b border-slate-700 text-xs uppercase tracking-wider">
+                    <th class="pb-2">#</th><th class="pb-2">Piloto</th><th class="pb-2">Ciudad</th>
+                    <th class="pb-2 text-center">Paradas</th><th class="pb-2 text-right">Puntos</th>
+                </tr></thead>
+                <tbody id="listaRanking"></tbody>
+            </table>
         </div>
     </div>
+</div>
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyC3oWovnz51_dQ8_HmFo78Y_7KN-M0xB8c",
-            authDomain: "buses-de-juanterere.firebaseapp.com",
-            projectId: "buses-de-juanterere",
-            storageBucket: "buses-de-juanterere.firebasestorage.app",
-            messagingSenderId: "810069577060",
-            appId: "1:810069577060:web:28c1c02bebe1b4989d3e71"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+<footer class="text-center text-slate-600 text-xs mt-8 pb-4">
+    Juan Tereré Analytics · Datos en tiempo real desde Firebase · Uso interno
+</footer>
 
-        let datosGlobales = [];
-        let charts = {};
+<script>
+/* --- FIREBASE --- */
+const firebaseConfig = {
+    apiKey: "AIzaSyC3oWovnz51_dQ8_HmFo78Y_7KN-M0xB8c",
+    authDomain: "buses-de-juanterere.firebaseapp.com",
+    projectId: "buses-de-juanterere",
+    storageBucket: "buses-de-juanterere.firebasestorage.app",
+    messagingSenderId: "810069577060",
+    appId: "1:810069577060:web:28c1c02bebe1b4989d3e71"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-        async function init() {
-            const snapshot = await db.collection('partidas').get();
-            datosGlobales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            actualizarDashboard();
-        }
+let datosGlobales = [];
+let charts = {};
 
-        function actualizarDashboard() {
-            const sponsor = document.getElementById('filtroSponsor').value;
-            document.getElementById('tituloCampaña').innerText = sponsor === 'todos' ? "Resumen de Plataforma" : sponsor;
+/* --- UTILIDADES --- */
+function obtenerModa(array) {
+    if (!array.length) return '-';
+    const conteo = {};
+    let maxEl = array[0], maxCount = 0;
+    for (let el of array) {
+        if (el == null || el === '') continue;
+        conteo[el] = (conteo[el] || 0) + 1;
+        if (conteo[el] > maxCount) { maxEl = el; maxCount = conteo[el]; }
+    }
+    return maxEl;
+}
 
-            const datos = sponsor === 'todos' ? datosGlobales : datosGlobales.filter(d => d.sponsor === sponsor);
+function esEstaSemana(fechaFirebase) {
+    if (!fechaFirebase) return false;
+    const fecha = fechaFirebase.toDate();
+    const hoy = new Date();
+    const diaSemana = hoy.getDay() || 7;
+    const inicioSemana = new Date(hoy);
+    inicioSemana.setDate(hoy.getDate() - diaSemana + 1);
+    inicioSemana.setHours(0, 0, 0, 0);
+    return fecha >= inicioSemana;
+}
 
-            // Cálculos de KPIs
-            const totalUsuarios = datos.length;
-            const totalImpactos = datos.reduce((a, b) => a + (Number(b.impactos) || 0), 0);
-            const totalTiempoSeg = datos.reduce((a, b) => a + (Number(b.tiempo) || 0), 0);
-            
-            document.getElementById('kpiUsuarios').innerText = totalUsuarios.toLocaleString();
-            document.getElementById('kpiImpactos').innerText = totalImpactos.toLocaleString();
-            document.getElementById('kpiTiempo').innerText = `${Math.floor(totalTiempoSeg / 3600)}h ${Math.floor((totalTiempoSeg % 3600) / 60)}m`;
-            
-            const avgSeg = totalUsuarios > 0 ? totalTiempoSeg / totalUsuarios : 0;
-            document.getElementById('kpiAvgTiempo').innerText = `${Math.floor(avgSeg / 60)}m ${Math.floor(avgSeg % 60)}s`;
+function fmtMinutos(segundos) {
+    if (!segundos || segundos <= 0) return '0m';
+    const m = Math.floor(segundos / 60);
+    const s = segundos % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 
-            // Resumen Ejecutivo
-            const conteoCiudades = [...new Set(datos.map(d => d.ciudad))].length;
-            let resumen = "No hay suficientes datos registrados para generar el resumen ejecutivo.";
-            if(totalUsuarios > 0) {
-                resumen = `Durante el período de análisis, la campaña generó una alta participación interactiva captando la atención de **${totalUsuarios.toLocaleString()} jugadores únicos**. El nivel de exposición de marca fue sumamente efectivo, logrando **${totalImpactos.toLocaleString()} impactos visuales directos** (un promedio de ${(totalImpactos/totalUsuarios).toFixed(1)} impactos por sesión). La campaña logró penetrar en **${conteoCiudades} ciudades** distintas, manteniendo al usuario conectado con la marca durante un tiempo promedio de ${Math.floor(avgSeg / 60)} minutos por experiencia.`;
-            }
-            document.getElementById('textoEjecutivo').innerHTML = resumen;
+function fmtMinutosSolo(segundos) {
+    if (!segundos || segundos <= 0) return '0m';
+    const m = Math.floor(segundos / 60);
+    const s = segundos % 60;
+    return `${m}m ${s.toString().padStart(2,'0')}s`;
+}
 
-            // Procesar Rankings
-            renderRankings(datos);
+function pct(val, total) {
+    if (!total) return '0%';
+    return Math.round(val / total * 100) + '%';
+}
 
-            // Tabla Ciudades
-            const ciudades = {};
-            datos.forEach(d => { ciudades[d.ciudad || 'Desconocida'] = (ciudades[d.ciudad] || 0) + 1; });
-            const listaC = document.getElementById('listaCiudades');
-            listaC.innerHTML = '';
-            Object.entries(ciudades).sort((a,b)=>b[1]-a[1]).forEach(([ciudad, cant]) => {
-                listaC.innerHTML += `<tr><td class="p-3 border border-slate-200">${ciudad}</td><td class="p-3 border border-slate-200 font-bold">${cant}</td></tr>`;
-            });
+/* --- CARGA --- */
+async function init() {
+    document.getElementById('lastUpdate').textContent = 'Cargando...';
+    try {
+        const snapshot = await db.collection('partidas').get();
+        datosGlobales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        actualizarDashboard();
+        const now = new Date();
+        document.getElementById('lastUpdate').textContent = 'Última actualización: ' + now.toLocaleTimeString('es-PY');
+    } catch (error) {
+        console.error("Error Firebase:", error);
+        document.getElementById('lastUpdate').textContent = '⚠️ Error de conexión';
+    }
+}
 
-            renderCharts(datos);
-        }
+/* --- DASHBOARD PRINCIPAL --- */
+function actualizarDashboard() {
+    const filtroSponsor = document.getElementById('filtroSponsor').value;
+    const filtroTiempo = document.getElementById('filtroTiempo').value;
 
-        function formatearJugador(j, index) {
-            const nombre = j.nombreCompleto || j.nombre || 'Anónimo';
-            const datosContacto = [];
-            if(j.ci) datosContacto.push(`CI: ${j.ci}`);
-            if(j.telefono) datosContacto.push(`Tel: ${j.telefono}`);
-            const infoExtra = datosContacto.length > 0 ? `<div class="text-xs text-slate-500 mt-1">${datosContacto.join(' | ')}</div>` : '';
+    let filtrados = filtroSponsor === 'todos'
+        ? [...datosGlobales]
+        : datosGlobales.filter(d => d.sponsor === filtroSponsor);
 
-            return `
-                <div class="flex justify-between items-center bg-white p-3 rounded shadow-sm border border-slate-100">
-                    <div>
-                        <div class="font-bold text-slate-800">#${index + 1} ${nombre}</div>
-                        <div class="text-xs text-slate-400">📍 ${j.ciudad || 'Sin ciudad'}</div>
-                        ${infoExtra}
-                    </div>
-                    <div class="font-black text-lg text-blue-600">${Math.floor(j.puntos || 0)} pts</div>
-                </div>
-            `;
-        }
+    if (filtroTiempo === 'semana') {
+        filtrados = filtrados.filter(d => esEstaSemana(d.fecha));
+    }
 
-        function renderRankings(datos) {
-            // Ordenar por puntos de mayor a menor
-            const ordenados = [...datos].sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+    const total = filtrados.length;
 
-            // Top 5 Nacional
-            const top5Nacional = ordenados.slice(0, 5);
-            document.getElementById('listaNacional').innerHTML = top5Nacional.length > 0 
-                ? top5Nacional.map((j, i) => formatearJugador(j, i)).join('') 
-                : '<p class="text-sm text-slate-500">Sin registros.</p>';
+    /* KPIs */
+    document.getElementById('kpiUsuarios').textContent = total.toLocaleString('es-PY');
+    document.getElementById('kpiPartidas').textContent = datosGlobales.length.toLocaleString('es-PY');
+    document.getElementById('kpiCiudad').textContent = obtenerModa(filtrados.map(d => d.ciudad)) || '-';
 
-            // Top 5 Semanal (Últimos 7 días)
-            const hace7Dias = new Date();
-            hace7Dias.setDate(hace7Dias.getDate() - 7);
+    // Retención promedio
+    const conTiempo = filtrados.filter(d => d.tiempoJugado && d.tiempoJugado > 0);
+    const promTiempoSeg = conTiempo.length
+        ? Math.round(conTiempo.reduce((a, b) => a + (b.tiempoJugado || 0), 0) / conTiempo.length)
+        : 0;
+    document.getElementById('kpiTiempo').textContent = fmtMinutosSolo(promTiempoSeg);
 
-            const datosSemanales = ordenados.filter(d => {
-                if(!d.fecha) return false;
-                // Manejar timestamps de Firestore
-                const fechaDoc = d.fecha.toDate ? d.fecha.toDate() : new Date(d.fecha);
-                return fechaDoc >= hace7Dias;
-            });
+    /* IMPACTO DE MARCA */
+    const chipaDatos = datosGlobales.filter(d => d.sponsor === 'Chipa');
+    const juanDatos  = datosGlobales.filter(d => d.sponsor === 'Juan');
 
-            const top5Semanal = datosSemanales.slice(0, 5);
-            document.getElementById('listaSemanal').innerHTML = top5Semanal.length > 0 
-                ? top5Semanal.map((j, i) => formatearJugador(j, i)).join('') 
-                : '<p class="text-sm text-slate-500">Nadie ha jugado esta semana.</p>';
-        }
+    const totalSegChipa = chipaDatos.reduce((a, b) => a + (b.tiempoJugado || 0), 0);
+    const totalSegJuan  = juanDatos.reduce((a,  b) => a + (b.tiempoJugado || 0), 0);
+    const maxTiempo = Math.max(totalSegChipa, totalSegJuan, 1);
 
-        function renderCharts(datos) {
-            if(charts.chofer) charts.chofer.destroy();
-            if(charts.bus) charts.bus.destroy();
+    document.getElementById('tiempoChipa').textContent = fmtMinutos(totalSegChipa);
+    document.getElementById('tiempoJuan').textContent  = fmtMinutos(totalSegJuan);
+    document.getElementById('usuariosChipa').textContent = chipaDatos.length;
+    document.getElementById('usuariosJuan').textContent  = juanDatos.length;
 
-            const ctxChofer = document.getElementById('chartChofer').getContext('2d');
-            charts.chofer = new Chart(ctxChofer, {
-                type: 'pie',
-                data: {
-                    labels: ['Hombre', 'Mujer'],
-                    datasets: [{ data: [datos.filter(d=>d.chofer==='Hombre').length, datos.filter(d=>d.chofer==='Mujer').length], backgroundColor: ['#3b82f6', '#ec4899'] }]
-                },
-                options: { plugins: { title: { display: true, text: 'Segmentación por Género (Chofer)' } } }
-            });
+    const promChipa = chipaDatos.length ? Math.round(totalSegChipa / chipaDatos.length) : 0;
+    const promJuan  = juanDatos.length  ? Math.round(totalSegJuan  / juanDatos.length)  : 0;
+    document.getElementById('promChipa').textContent = fmtMinutosSolo(promChipa);
+    document.getElementById('promJuan').textContent  = fmtMinutosSolo(promJuan);
 
-            const ctxBus = document.getElementById('chartBus').getContext('2d');
-            charts.bus = new Chart(ctxBus, {
-                type: 'pie',
-                data: {
-                    labels: ['Convencional', 'Eléctrico'],
-                    datasets: [{ data: [datos.filter(d=>d.tipoBus==='Convencional').length, datos.filter(d=>d.tipoBus==='Electrico').length], backgroundColor: ['#f59e0b', '#10b981'] }]
-                },
-                options: { plugins: { title: { display: true, text: 'Preferencia de Vehículo' } } }
-            });
-        }
+    // Animar barras con un pequeño delay para efecto visual
+    setTimeout(() => {
+        document.getElementById('barraChipa').style.width = (totalSegChipa / maxTiempo * 100) + '%';
+        document.getElementById('barraJuan').style.width  = (totalSegJuan  / maxTiempo * 100) + '%';
+    }, 100);
 
-        init();
-    </script>
+    /* GRÁFICOS */
+    renderCharts(filtrados);
+
+    /* PORCENTAJES bajo los gráficos */
+    const conv = filtrados.filter(d => d.tipoBus === 'Convencional' || !d.tipoBus).length;
+    const elec = filtrados.filter(d => d.tipoBus === 'Electrico').length;
+    document.getElementById('pctConv').textContent = pct(conv, total);
+    document.getElementById('pctElec').textContent = pct(elec, total);
+
+    const cChipa = filtrados.filter(d => d.sponsor === 'Chipa').length;
+    const cJuan  = filtrados.filter(d => d.sponsor === 'Juan').length;
+    document.getElementById('pctChipa').textContent = pct(cChipa, total);
+    document.getElementById('pctJuan').textContent  = pct(cJuan, total);
+
+    const cHom = filtrados.filter(d => d.chofer === 'hom').length;
+    const cFem = filtrados.filter(d => d.chofer === 'fem').length;
+    document.getElementById('pctHom').textContent = pct(cHom, total);
+    document.getElementById('pctFem').textContent = pct(cFem, total);
+
+    /* RANKING NACIONAL (histórico, top 10, siempre sin filtro de tiempo) */
+    const basePNac = filtroSponsor === 'todos'
+        ? [...datosGlobales]
+        : datosGlobales.filter(d => d.sponsor === filtroSponsor);
+    renderTabla('listaRanking', basePNac, 10, true);
+
+    /* RANKING SEMANAL (top 5, siempre esta semana) */
+    const baseSem = (filtroSponsor === 'todos' ? datosGlobales : datosGlobales.filter(d => d.sponsor === filtroSponsor))
+        .filter(d => esEstaSemana(d.fecha));
+    renderTabla('listaSemanal', baseSem, 5, false);
+}
+
+/* --- TABLA DE RANKING --- */
+function renderTabla(idTbody, datos, limite, esPodioExtendido) {
+    const tbody = document.getElementById(idTbody);
+    const ordenados = [...datos].sort((a, b) =>
+        (b.paradas || 0) - (a.paradas || 0) || (b.puntos || 0) - (a.puntos || 0)
+    );
+
+    const medallas = ['🥇','🥈','🥉'];
+    const filas = ordenados.slice(0, limite);
+
+    if (!filas.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-5 text-center text-slate-500 text-xs">Sin datos para mostrar.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filas.map((d, i) => {
+        const prefijo = medallas[i] || `${i + 1}`;
+        const bgClass = i === 0
+            ? 'bg-amber-900/20'
+            : i === 1 ? 'bg-slate-700/20'
+            : i === 2 ? 'bg-orange-900/10' : '';
+        const ptsColor = i === 0 ? 'text-amber-400' : 'text-emerald-400';
+        return `<tr class="border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors ${bgClass}">
+            <td class="py-2.5 text-slate-400 text-sm">${prefijo}</td>
+            <td class="py-2.5 font-bold text-sm">${(d.nombre||'Anónimo').substring(0,18)}</td>
+            <td class="py-2.5 text-slate-400 text-xs">${(d.ciudad||'-').substring(0,14)}</td>
+            <td class="py-2.5 text-center text-teal-400 font-semibold text-sm">${d.paradas||0}</td>
+            <td class="py-2.5 text-right ${ptsColor} font-bold text-sm">${(d.puntos||0).toLocaleString('es-PY')}</td>
+        </tr>`;
+    }).join('');
+}
+
+/* --- GRÁFICOS --- */
+const CHART_OPTS = {
+    cutout: '68%',
+    plugins: {
+        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 }, padding: 10, boxWidth: 12 } }
+    }
+};
+
+function renderCharts(datos) {
+    const total = datos.length || 1;
+    ['bus','sponsor','chofer'].forEach(k => { if(charts[k]) charts[k].destroy(); });
+
+    // Bus
+    const conv = datos.filter(d => d.tipoBus === 'Convencional' || !d.tipoBus).length;
+    const elec = datos.filter(d => d.tipoBus === 'Electrico').length;
+    charts.bus = new Chart(document.getElementById('chartBuses').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: ['Convencional', 'Eléctrico'], datasets: [{ data: [conv, elec], backgroundColor: ['#f59e0b','#00ffcc'], borderWidth: 0 }] },
+        options: CHART_OPTS
+    });
+
+    // Sponsor
+    const cChipa = datos.filter(d => d.sponsor === 'Chipa').length;
+    const cJuan  = datos.filter(d => d.sponsor === 'Juan').length;
+    charts.sponsor = new Chart(document.getElementById('chartSponsors').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: ['Chipa Viajera', 'Juan Tereré'], datasets: [{ data: [cChipa, cJuan], backgroundColor: ['#ef4444','#3b82f6'], borderWidth: 0 }] },
+        options: CHART_OPTS
+    });
+
+    // Chofer
+    const cHom = datos.filter(d => d.chofer === 'hom').length;
+    const cFem = datos.filter(d => d.chofer === 'fem').length;
+    const cNoReg = total - cHom - cFem;
+    charts.chofer = new Chart(document.getElementById('chartChofer').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: cNoReg > 0 ? ['Hombre','Mujer','Sin registro'] : ['Hombre','Mujer'],
+            datasets: [{ data: cNoReg > 0 ? [cHom, cFem, cNoReg] : [cHom, cFem], backgroundColor: ['#818cf8','#f472b6','#475569'], borderWidth: 0 }]
+        },
+        options: CHART_OPTS
+    });
+}
+
+/* --- EXPORTAR GANADORES --- */
+function descargarGanadores() {
+    const ganadores = datosGlobales.filter(d => d.telefono && d.ci);
+    if (!ganadores.length) {
+        alert("Aún no hay ganadores registrados con datos de contacto.");
+        return;
+    }
+    let csv = "Alias,Nombre Completo,CI,Telefono,Ciudad,Bus,Sponsor,Chofer,Paradas,Puntos,Tiempo(seg),Fecha\n";
+    ganadores.forEach(d => {
+        const fecha = d.fecha ? d.fecha.toDate().toLocaleDateString('es-PY') : '-';
+        const choferLabel = d.chofer === 'hom' ? 'Hombre' : d.chofer === 'fem' ? 'Mujer' : '-';
+        csv += `"${d.nombre||''}","${d.nombreCompleto||''}","${d.ci||''}","${d.telefono||''}","${d.ciudad||''}","${d.tipoBus||''}","${d.sponsor||''}","${choferLabel}","${d.paradas||0}","${d.puntos||0}","${d.tiempoJugado||0}","${fecha}"\n`;
+    });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ganadores_juan_terere.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+init();
+</script>
 </body>
 </html>

@@ -55,8 +55,10 @@
 </head>
 <body>
 
+<div id="debugError" style="display:none; position:fixed; top:0; left:0; right:0; background:#b00020; color:#fff; font-size:12px; line-height:1.4; padding:10px; z-index:99999; text-align:left; word-break:break-word; font-family: monospace;"></div>
+
 <div id="scr1" class="screen active">
-    <img src="Juan_Tereré_Aventurero.png" class="img-titulo" alt="Juan Tereré">
+    <img src="imagenes/Juan_Tereré_Aventurero.png" class="img-titulo" alt="Juan Tereré">
     <h1>LOS JUEGOS DE<br>JUAN TERERÉ</h1>
     <button class="btn-jugar" onclick="pantallas.mostrar('scr2')">JUGAR</button>
 </div>
@@ -64,19 +66,19 @@
 <div id="scr2" class="screen" style="justify-content: flex-start; padding-top: 30px;">
     <h2>ELIGE TU BUS</h2>
     <div style="display:flex; gap:15px; justify-content: center; margin-bottom: 10px;">
-        <div onclick="interfaz.seleccionarBus('Convencional')"><img src="Bus.png" id="imgBusNormal" style="height:90px;" class="selected"><div style="font-size:12px;">Convencional</div></div>
-        <div onclick="interfaz.seleccionarBus('Electrico')"><img src="Bus_electrico.png" id="imgBusElec" style="height:90px;"><div style="font-size:12px;">Eléctrico</div></div>
+        <div onclick="interfaz.seleccionarBus('Convencional')"><img src="imagenes/Bus.png" id="imgBusNormal" style="height:90px;" class="selected"><div style="font-size:12px;">Convencional</div></div>
+        <div onclick="interfaz.seleccionarBus('Electrico')"><img src="imagenes/Bus_electrico.png" id="imgBusElec" style="height:90px;"><div style="font-size:12px;">Eléctrico</div></div>
     </div>
     <h2>ELIGE TU SPONSOR</h2>
     <div class="carrusel-contenedor">
         <button class="flecha" onclick="interfaz.moverCarrusel(-1)">&#8592;</button>
         <div class="carrusel-items" id="sponsorCarousel">
-            <div class="item-sponsor active" data-val="La Chipa Viajera"><img src="Libro_Chipa_viajera.png" style="width:80px;"><span>Chipa Viajera</span></div>
-            <div class="item-sponsor" data-val="Juan Tereré"><img src="Libro_UNESCO_Juantereré.png" style="width:80px;"><span>Juan Tereré</span></div>
+            <div class="item-sponsor active" data-val="La Chipa Viajera"><img src="imagenes/Libro_Chipa_viajera.png" style="width:80px;"><span>Chipa Viajera</span></div>
+            <div class="item-sponsor" data-val="Juan Tereré"><img src="imagenes/Libro_UNESCO_Juantereré.png" style="width:80px;"><span>Juan Tereré</span></div>
         </div>
         <button class="flecha" onclick="interfaz.moverCarrusel(1)">&#8594;</button>
     </div>
-    <div id="busPreviewContainer"><img id="busPreview" src="Bus_Chipa_Viajera.png"></div>
+    <div id="busPreviewContainer"><img id="busPreview" src="imagenes/Bus_Chipa_Viajera.png"></div>
     <button class="btn-jugar" onclick="pantallas.mostrar('scr3')" style="margin-top: 0;">Siguiente</button>
 </div>
 
@@ -92,8 +94,8 @@
     </select>
     <h2>ELIGE TU CHOFER</h2>
     <div style="display:flex; gap:30px; justify-content: center; margin-bottom: 20px; height: 200px; align-items: flex-end;">
-        <img src="chofer_hom.png" id="ch1" class="chofer-img" onclick="interfaz.seleccionarChofer('Hombre')">
-        <img src="chofer_fem.png" id="ch2" class="chofer-img" onclick="interfaz.seleccionarChofer('Mujer')">
+        <img src="imagenes/chofer_hom.png" id="ch1" class="chofer-img" onclick="interfaz.seleccionarChofer('Hombre')">
+        <img src="imagenes/chofer_fem.png" id="ch2" class="chofer-img" onclick="interfaz.seleccionarChofer('Mujer')">
     </div>
     <button class="btn-jugar" onclick="game.iniciar()">¡Arrancar Motor!</button>
 </div>
@@ -126,6 +128,32 @@
 </div>
 
 <script>
+window.addEventListener('error', function(e) {
+    var box = document.getElementById('debugError');
+    if (!box) return;
+    box.style.display = 'block';
+    box.innerText = '⚠️ Error en el juego: ' + e.message + ' (línea ' + e.lineno + ', col ' + e.colno + ')';
+});
+
+/* ==========================================================================
+   PROTECCIÓN CONTRA CUELGUES DE FIRESTORE
+   ---------------------------------------------------------------------------
+   Si Firestore no puede conectar (sin internet, bloqueo de red, o el juego
+   abierto como archivo local con doble clic en vez de subido a un servidor),
+   una consulta puede quedar "pensando" para siempre y nunca resolver ni
+   fallar. Sin esto, la pantalla queda negra esperando una respuesta que
+   nunca llega. Con esto, si en 5 segundos no hay respuesta, seguimos igual
+   sin guardar el puntaje en línea, pero el jugador nunca se queda trabado.
+   ========================================================================== */
+function conTimeout(promesa, ms = 5000) {
+    return Promise.race([
+        promesa,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado con la base de datos')), ms))
+    ]);
+}
+</script>
+
+<script>
 const SPONSOR_CONFIG = {
     'La Chipa Viajera': { adImg: 'cartel_publi_Chipa' },
     'Juan Tereré': { adImg: 'cartel_publi_juant' }
@@ -142,7 +170,8 @@ const configJugador = { nombre: '', ciudad: '', tipoBus: 'Convencional', sponsor
 const estadisticas = { puntaje: 0, combustibleRestante: GAME.MAX_FUEL, paradasPasadas: 0, impactos: 0, tiempoInicio: 0, esTop3: false };
 
 const IMAGES = {};
-function preloadImage(name, src) { IMAGES[name] = new Image(); IMAGES[name].src = src; }
+const IMG_BASE = 'imagenes/';
+function preloadImage(name, src) { IMAGES[name] = new Image(); IMAGES[name].src = IMG_BASE + src; }
 function imgLista(img) { return !!img && img.complete && img.naturalWidth > 0; }
 
 // Precarga básica
@@ -183,14 +212,14 @@ const interfaz = {
         this.currentSponsorIndex = (this.currentSponsorIndex + dir + items.length) % items.length;
         items[this.currentSponsorIndex].classList.add('active');
         configJugador.sponsor = items[this.currentSponsorIndex].getAttribute('data-val');
-        document.getElementById('busPreview').src = configJugador.sponsor === 'La Chipa Viajera' ? 'Bus_Chipa_Viajera.png' : 'Bus_Juan_tereré.png';
+        document.getElementById('busPreview').src = configJugador.sponsor === 'La Chipa Viajera' ? 'imagenes/Bus_Chipa_Viajera.png' : 'imagenes/Bus_Juan_tereré.png';
     },
     mostrarGameOver: async function(victoria = false) {
         const duracionSegundos = Math.floor((Date.now() - estadisticas.tiempoInicio) / 1000);
         document.getElementById('gameContainer').style.display = 'none';
 
         try {
-            const snap = await db.collection('partidas').orderBy('puntos', 'desc').limit(3).get();
+            const snap = await conTimeout(db.collection('partidas').orderBy('puntos', 'desc').limit(3).get());
             let esTop = false;
             if (snap.size < 3) esTop = true;
             else if (estadisticas.puntaje > snap.docs[2].data().puntos) esTop = true;
@@ -199,14 +228,14 @@ const interfaz = {
                 estadisticas.esTop3 = true;
                 pantallas.mostrar('pantalla-top3');
             } else {
-                await db.collection('partidas').add({
+                await conTimeout(db.collection('partidas').add({
                     nombre: configJugador.nombre, ciudad: configJugador.ciudad, puntos: Number(estadisticas.puntaje), paradas: Number(estadisticas.paradasPasadas),
                     chofer: configJugador.chofer, tipoBus: configJugador.tipoBus, sponsor: configJugador.sponsor,
                     tiempo: duracionSegundos, impactos: estadisticas.impactos, fecha: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                }));
                 this.finalizar(victoria);
             }
-        } catch (e) { this.finalizar(victoria); }
+        } catch (e) { console.warn("No se pudo consultar/guardar en Firestore, se continúa sin conexión:", e); this.finalizar(victoria); }
     },
     finalizar: function(victoria) {
         document.getElementById('tituloFinal').innerHTML = victoria ? "¡RECORRIDO<br>COMPLETADO!" : "¡RECORRIDO<br>FINALIZADO!";
@@ -220,14 +249,18 @@ const interfaz = {
 async function guardarTop3() {
     const duracionSegundos = Math.floor((Date.now() - estadisticas.tiempoInicio) / 1000);
     try {
-        await db.collection('partidas').add({
+        await conTimeout(db.collection('partidas').add({
             nombre: configJugador.nombre, ciudad: configJugador.ciudad, puntos: Number(estadisticas.puntaje), paradas: Number(estadisticas.paradasPasadas),
             chofer: configJugador.chofer, tipoBus: configJugador.tipoBus, sponsor: configJugador.sponsor,
             tiempo: duracionSegundos, impactos: estadisticas.impactos, fecha: firebase.firestore.FieldValue.serverTimestamp(),
             nombreCompleto: document.getElementById('top3-nombre').value, ci: document.getElementById('top3-ci').value, telefono: document.getElementById('top3-tel').value
-        });
+        }));
         interfaz.finalizar(estadisticas.paradasPasadas >= 100);
-    } catch(e) { alert("Error al guardar."); }
+    } catch(e) {
+        console.warn("No se pudo guardar el registro de ganador:", e);
+        alert("No se pudo conectar con la base de datos para guardar tus datos. Verificá tu conexión a internet e intentá de nuevo.");
+        interfaz.finalizar(estadisticas.paradasPasadas >= 100);
+    }
 }
 
 const canvas = document.getElementById("gameCanvas");
